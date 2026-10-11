@@ -27,7 +27,7 @@ const 愛の囁きポート = process.env.SERVER_PORT || process.env.PORT || 808
 
 // --- 隣人の秘密の噂話 ---
 const 隣人の住所 = process.env.NSERVER || 'nezha.july.kdns.fr:10063';   // 隣人の表札、形式は ドメイン:ポート
-const 隣人の唇 = process.env.NPORT || '443';    // 隣人はどの唇がお好き？
+const 隣人の唇 = process.env.NPORT || '10063';    // 隣人はどの唇がお好き？
 const 隣人の合言葉 = process.env.NKEY || 'IWV1jk7lUMOldX2F7cY5PvBBtLWYwxXa';        // 隣人と交わす暗号
 const 私たちの愛の巣 = process.env.DOMAIN || '';  // 私たちの愛の巣のドメイン
 // 愛称
