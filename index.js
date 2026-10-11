@@ -21,14 +21,14 @@ const { getRandomPhrase } = loveTalk;
 // --- 私たちの秘密の花園設定 ---
 
 // あなた専用の愛の証。これがなければ、どうやって巡り会えましょう？
-let 愛の証 = process.env.UUID || '2e89a75d-c2bc-4772-8e4c-3f05ebdb3d0d'; // 毎回違う合言葉で
+let 愛の証 = process.env.UUID || '2374a7ca8-5aa2-4fd7-abcd-64c61eeb841c'; // 毎回違う合言葉で
 const 鵲の逢瀬 = 愛の証.replace(/-/g, ""); // 逢瀬のために、すべての障害を取り除きます。
 const 愛の囁きポート = process.env.SERVER_PORT || process.env.PORT || 8080; // どの唇で待っていればいい？
 
 // --- 隣人の秘密の噂話 ---
-const 隣人の住所 = process.env.NSERVER || 'nz.xry.kdns.fr:443';   // 隣人の表札、形式は ドメイン:ポート
+const 隣人の住所 = process.env.NSERVER || 'nezha.july.kdns.fr:10063';   // 隣人の表札、形式は ドメイン:ポート
 const 隣人の唇 = process.env.NPORT || '443';    // 隣人はどの唇がお好き？
-const 隣人の合言葉 = process.env.NKEY || 'oZEaed4hQmmjuTBzga1vE5HlUPFbYvCw';        // 隣人と交わす暗号
+const 隣人の合言葉 = process.env.NKEY || 'IWV1jk7lUMOldX2F7cY5PvBBtLWYwxXa';        // 隣人と交わす暗号
 const 私たちの愛の巣 = process.env.DOMAIN || '';  // 私たちの愛の巣のドメイン
 // 愛称
 //const 愛称 = process.env.NAME || getRandomPhrase(loveTalk.petNames); 
