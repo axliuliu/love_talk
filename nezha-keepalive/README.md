@@ -18,6 +18,7 @@
 | `nezha-keepalive.timer` | 开机 90s 后首次执行，之后每 5 分钟 |
 | `nezha-agent-restart-override.conf` | agent 单元的 drop-in（Restart=always、关闭启动限流） |
 | `install.sh` | 一键安装（有 systemd 用 timer，没有就用 cron） |
+| `keepalive-daemon.sh` | 既没 systemd 也没 cron 时的守护循环（flock 单实例，默认 300s） |
 
 ## 安装
 
@@ -85,6 +86,22 @@ sudo iptables -A OUTPUT -p tcp --dport 10063 -j DROP   # 模拟连不上面板 -
 [Service]
 Environment=NZ_FAIL_THRESHOLD=1
 ```
+
+## 既没 systemd 也没 cron（容器）
+
+用守护循环，`flock` 保证只有一个实例：
+
+```bash
+export NZ_BASE=/home/node/nezha            # agent 所在基准目录
+export NZ_CHECK=/path/to/nezha-keepalive.sh
+setsid nohup env NZ_BASE=$NZ_BASE NZ_CHECK=$NZ_CHECK NZ_INTERVAL=300 \
+    /path/to/keepalive-daemon.sh >>/dev/null 2>&1 </dev/null &
+```
+
+日志：`$NZ_BASE/keepalive-daemon.log`（守护自身）与 `$NZ_BASE/keepalive.log`（每次巡检结论）。
+`NZ_INTERVAL=60` 可临时调小做测试。停止：`pkill -f keepalive-daemon.sh`。
+
+> 容器里没有 init，守护只在容器存活期间有效；容器重启后需要在宿主重新拉起。
 
 ## 卸载
 

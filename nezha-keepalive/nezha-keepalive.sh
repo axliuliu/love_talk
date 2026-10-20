@@ -219,7 +219,7 @@ main() {
         if service_action start; then
             if [ "$DRY_RUN" = 1 ] || [ -n "$(agent_pids)" ]; then
                 reset_fail
-                set_last_status ok
+                set_last_status started
                 [ "$DRY_RUN" = 1 ] && { log "DRY-RUN: start 逻辑通过"; exit 0; }
                 log "已拉起 nezha-agent"
                 exit 0
