@@ -1,0 +1,9 @@
+[Unit]
+Description=Nezha agent keepalive check (restart if offline)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nezha-keepalive.sh
+Nice=10

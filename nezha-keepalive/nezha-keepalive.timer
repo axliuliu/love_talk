@@ -1,0 +1,11 @@
+[Unit]
+Description=Run nezha-agent keepalive every 5 minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=5min
+AccuracySec=15s
+Unit=nezha-keepalive.service
+
+[Install]
+WantedBy=timers.target
