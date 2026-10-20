@@ -18,6 +18,9 @@ LOG_FILE="${NZ_LOG_FILE:-/var/log/nezha-keepalive.log}"
 AGENT_OUT_LOG="${NZ_AGENT_OUT_LOG:-/var/log/nezha-agent.out}"
 FAIL_THRESHOLD="${NZ_FAIL_THRESHOLD:-2}"  # 连续 N 次未连接才重启（2 x 5min = 10min）
 CONNECT_TIMEOUT="${NZ_CONNECT_TIMEOUT:-5}"
+STARTUP_GRACE="${NZ_STARTUP_GRACE:-25}"   # 进程启动不足 N 秒时不做“是否连上”判定（10s 巡检必须留）
+RESTART_COOLDOWN="${NZ_RESTART_COOLDOWN:-60}"  # 两次 restart 的最小间隔，防止重连风暴
+STALE_STATE_DIR="${NZ_STATE_FILE_DIR:-/tmp/nezha-agent}"  # agent 单实例状态文件目录
 MAX_LOG_BYTES="${NZ_MAX_LOG_BYTES:-1048576}"
 DRY_RUN="${NZ_DRY_RUN:-0}"
 
@@ -97,6 +100,16 @@ detect_unit() {
     echo "$u"
 }
 
+# 进程已运行秒数（依赖 /proc/PID/stat 的 starttime + /proc/stat btime）
+proc_age() {
+    local pid="$1" st btime hz
+    st=$(sed 's/.*) //' "/proc/$pid/stat" 2>/dev/null | awk '{print $20}')
+    btime=$(awk '/^btime/{print $2}' /proc/stat 2>/dev/null)
+    hz=$(getconf CLK_TCK 2>/dev/null || echo 100)
+    [ -n "$st" ] && [ -n "$btime" ] || return 1
+    echo $(( $(date +%s) - btime - st / hz ))
+}
+
 # 判断 pid 是否持有到面板端口的 ESTABLISHED 连接
 is_connected() {
     local pid="$1" hexport sock_inodes
@@ -161,6 +174,20 @@ service_action() {
     if [ "$DRY_RUN" = 1 ]; then
         log "DRY-RUN: would $action agent (unit=${unit:-none}, bin=$AGENT_BIN)"
         return 0
+    fi
+
+    # supervisor 模式：必须经 supervisorctl 操作，否则会和 supervisord 抢进程
+    if [ "${NZ_SUPERVISOR:-0}" = "1" ]; then
+        local sctl="${NZ_SUPERVISORCTL:-supervisorctl}"
+        local conf="${SUPERVISOR_CONF:-/etc/supervisor/supervisord.conf}"
+        local prog="${NZ_SUPERVISOR_PROG:-nezha-agent}"
+        "$sctl" -c "$conf" clear "$prog" >/dev/null 2>&1
+        if [ "$action" = "restart" ]; then
+            "$sctl" -c "$conf" restart "$prog" >/dev/null 2>&1
+        else
+            "$sctl" -c "$conf" start "$prog" >/dev/null 2>&1
+        fi
+        return $?
     fi
 
     if have_systemd && [ -n "$unit" ]; then
@@ -245,6 +272,14 @@ main() {
 
     log "进程在（pid=$(echo "$pids" | tr '\n' ' ')）但未连上 $HOST:$PORT"
 
+    # 启动宽限期：agent 刚起来那几秒必然还没建立连接，不能判成掉线
+    local age
+    age=$(proc_age "$(echo "$pids" | awk 'NR==1{print $1}')")
+    if [ -n "$age" ] && [ "$age" -lt "$STARTUP_GRACE" ]; then
+        log "进程仅运行 ${age}s（< ${STARTUP_GRACE}s 宽限期），跳过连接判定"
+        exit 0
+    fi
+
     if ! panel_reachable; then
         log "面板 $HOST:$PORT 不可达，先不重启（重启无法解决，等面板恢复）"
         exit 0
@@ -258,6 +293,33 @@ main() {
     fi
 
     log "连续失败达 $FAIL_THRESHOLD 次，执行 restart"
+
+    # 重启冷却：避免 agent 刚起就被判掉线、反复重连把面板打爆
+    local now last elapsed
+    now=$(date +%s)
+    last=$(cat "$STATE_DIR/last_restart" 2>/dev/null || echo 0)
+    case "$last" in ''|*[!0-9]*) last=0 ;; esac
+    elapsed=$((now - last))
+    if [ "$last" -gt 0 ] && [ "$elapsed" -lt "$RESTART_COOLDOWN" ]; then
+        log "距上次重启仅 ${elapsed}s（< ${RESTART_COOLDOWN}s 冷却），本次跳过"
+        exit 0
+    fi
+    [ "$DRY_RUN" = 1 ] || { mkdir -p "$STATE_DIR" 2>/dev/null; printf '%s\n' "$now" >"$STATE_DIR/last_restart" 2>/dev/null; }
+
+    # 清理陈旧单实例状态文件：agent 被 SIGKILL 后残留的 agent-*.stat 会让新实例
+    # 起来却不建连（本机实测踩过）。只删超过 60s 没更新的，避免误删活跃实例的
+    if [ "${NZ_CLEAN_STALE_STATE:-1}" = "1" ] && [ -d "$STALE_STATE_DIR" ]; then
+        local f mtime
+        for f in "$STALE_STATE_DIR"/agent-*.stat; do
+            [ -e "$f" ] || continue
+            mtime=$(stat -c %Y "$f" 2>/dev/null || echo 0)
+            if [ "$((now - mtime))" -gt 60 ]; then
+                log "清理陈旧状态文件: $f"
+                [ "$DRY_RUN" = 1 ] || rm -f "$f" 2>/dev/null
+            fi
+        done
+    fi
+
     reset_fail
     if service_action restart; then
         if [ "$DRY_RUN" = 1 ] || [ -n "$(agent_pids)" ]; then

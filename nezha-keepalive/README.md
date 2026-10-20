@@ -19,6 +19,8 @@
 | `nezha-agent-restart-override.conf` | agent 单元的 drop-in（Restart=always、关闭启动限流） |
 | `install.sh` | 一键安装（有 systemd 用 timer，没有就用 cron） |
 | `keepalive-daemon.sh` | 既没 systemd 也没 cron 时的守护循环（flock 单实例，默认 300s） |
+| `supervisord.conf` | supervisor 托管方案：agent + 每 10 秒自愈循环 |
+| `nezha-autoheal.sh` | supervisor 用的巡检循环（默认 `NZ_INTERVAL=10`） |
 
 ## 安装
 
@@ -102,6 +104,27 @@ setsid nohup env NZ_BASE=$NZ_BASE NZ_CHECK=$NZ_CHECK NZ_INTERVAL=300 \
 `NZ_INTERVAL=60` 可临时调小做测试。停止：`pkill -f keepalive-daemon.sh`。
 
 > 容器里没有 init，守护只在容器存活期间有效；容器重启后需要在宿主重新拉起。
+
+## 用 supervisor 托管（10 秒自愈）
+
+适合容器/无 init 环境，比裸守护多了进程托管：agent 崩溃 supervisor 立即重启，掉线由 10 秒巡检通过 `supervisorctl restart` 修复。
+
+```bash
+pip install supervisor            # 或用系统包管理器
+mkdir -p /opt/nezha/{logs,run,state}
+install -m 0755 nezha-autoheal.sh /opt/nezha/nezha-autoheal.sh
+install -m 0644 supervisord.conf  /etc/supervisor/supervisord.conf
+supervisord -c /etc/supervisor/supervisord.conf
+supervisorctl -c /etc/supervisor/supervisord.conf status
+```
+
+关键点（都是踩过坑才加的）：
+
+- **抓重启必须走 `supervisorctl`**：脚本用 `NZ_SUPERVISOR=1` 切换，否则自己 `nohup` 起进程会和 supervisord 抢，出现两个 agent 用同一 uuid 互踢。
+- **启动宽限期 `NZ_STARTUP_GRACE=25`**：10 秒一轮时，agent 刚起来的几秒还没建连，会被误判掉线导致无限重启（实测发生）。
+- **重启冷却 `NZ_RESTART_COOLDOWN=60`**：两次 restart 至少间隔 60 秒，避免把面板打成重连风暴。
+- **陈旧状态文件**：agent 被 `kill -9` 后 `/tmp/nezha-agent/agent-*.stat` 残留会让新实例起来但不建连（实测卡死 3 分钟）。巡检会清理 60 秒以上未更新的该文件。
+- `startretries=10`：真崩溃时不会无限无间隔重拉，超过 10 次进入 FATAL，10 秒内被自愈循环 `clear + start` 救回。
 
 ## 卸载
 
