@@ -36,9 +36,10 @@ log "守护启动 pid=$$ interval=${INTERVAL}s check=$CHECK"
 trap 'log "守护退出 pid=$$"; exit 0' TERM INT
 
 while :; do
-    "$CHECK" >>"$OUT" 2>&1
+    "$CHECK" >>"$OUT" 2>&1 9>&-
     rc=$?
     log "巡检完成 rc=$rc, 下次 $(date -d "+${INTERVAL} seconds" '+%F %T')"
-    sleep "$INTERVAL" &
+    # 9>&- ：不要让子进程（含 agent）继承锁 fd，否则守护死后锁不释放
+    sleep "$INTERVAL" 9>&- &
     wait $!
 done
