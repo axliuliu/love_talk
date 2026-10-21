@@ -21,6 +21,7 @@
 | `keepalive-daemon.sh` | 既没 systemd 也没 cron 时的守护循环（flock 单实例，默认 300s） |
 | `supervisord.conf` | supervisor 托管方案：agent + 每 10 秒自愈循环 |
 | `nezha-autoheal.sh` | supervisor 用的巡检循环（默认 `NZ_INTERVAL=10`） |
+| `start-supervisor.sh` | 幂等拉起 supervisord（容器重启后执行这一条即可） |
 
 ## 安装
 
@@ -125,6 +126,7 @@ supervisorctl -c /etc/supervisor/supervisord.conf status
 - **重启冷却 `NZ_RESTART_COOLDOWN=60`**：两次 restart 至少间隔 60 秒，避免把面板打成重连风暴。
 - **陈旧状态文件**：agent 被 `kill -9` 后 `/tmp/nezha-agent/agent-*.stat` 残留会让新实例起来但不建连（实测卡死 3 分钟）。巡检会清理 60 秒以上未更新的该文件。
 - `startretries=10`：真崩溃时不会无限无间隔重拉，超过 10 次进入 FATAL，10 秒内被自愈循环 `clear + start` 救回。
+- **容器/沙箱重启后**进程全丢，文件还在，执行一次 `./start-supervisor.sh` 即可（幂等，会先清理残留的 `supervisor.sock` 和 `/tmp/nezha-agent`）。
 
 ## 卸载
 
