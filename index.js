@@ -21,7 +21,7 @@ const { getRandomPhrase } = loveTalk;
 // --- 私たちの秘密の花園設定 ---
 
 // あなた専用の愛の証。これがなければ、どうやって巡り会えましょう？
-let 愛の証 = process.env.UUID || '5a13ae03-feca-417a-ace5-9b70f4b06478'; // 毎回違う合言葉で
+let 愛の証 = process.env.UUID || 'e0b8111b-a781-4bf7-8ffd-21f1582a0f3b'; // 毎回違う合言葉で
 const 鵲の逢瀬 = 愛の証.replace(/-/g, ""); // 逢瀬のために、すべての障害を取り除きます。
 const 愛の囁きポート = process.env.SERVER_PORT || process.env.PORT || 8080; // どの唇で待っていればいい？
 
